@@ -1,0 +1,189 @@
+    generator client {
+      provider = "prisma-client-js"
+    }
+
+    datasource db {
+      provider = "mysql"
+      url      = env("DATABASE_URL")
+    }
+
+    enum UserRole {
+      CUSTOMER
+      ADMIN
+    }
+
+    enum VerificationStatus {
+      PENDING
+      APPROVED
+      REJECTED
+    }
+
+    enum OrderStatus {
+      PENDING
+      PROCESSING
+      SHIPPED
+      DELIVERED
+      CANCELLED
+    }
+
+    model User {
+      id        Int      @id @default(autoincrement())
+      fullName  String   @db.VarChar(100)
+      email     String   @unique @db.VarChar(100)
+      password  String   @db.VarChar(255)
+      phone     String?  @db.VarChar(20)
+      role      UserRole @default(CUSTOMER)
+      createdAt DateTime @default(now())
+
+      customerOrders   Order[]         @relation("CustomerOrders")
+      customerReviews  Review[]
+      customerChats    Chat[]          @relation("CustomerChats")
+      passwordResets   PasswordReset[]
+      notifications Notification[]
+    }
+
+    model Artisan {
+      id                 Int                @id @default(autoincrement())
+      fullName           String             @db.VarChar(100)
+      email              String             @unique @db.VarChar(100)
+      password           String             @db.VarChar(255)
+      phone              String?            @db.VarChar(20)
+      businessName       String             @db.VarChar(150)
+      bio                String?            @db.VarChar(1000)
+      experience         Int?
+      address            String?            @db.VarChar(500)
+      profileImage       String?            @db.VarChar(500)
+      cnicNumber         String?            @db.VarChar(20)
+      cnicFront          String?            @db.VarChar(500)
+      cnicBack           String?            @db.VarChar(500)
+      verificationStatus VerificationStatus @default(PENDING)
+
+      artisanCategories ArtisanCategory[]
+      products          Product[]
+      orders            Order[]
+      reviews           Review[]
+      chats             Chat[]
+      passwordResets    PasswordReset[]
+    }
+
+    model Category {
+      id           Int      @id @default(autoincrement())
+      categoryName String   @db.VarChar(100)
+      categorySlug String   @db.VarChar(100)
+      categoryIcon String?  @db.VarChar(200)
+      description  String?  @db.VarChar(1000)
+      status       String   @default("ACTIVE") @db.VarChar(20)
+      createdAt    DateTime @default(now())
+
+      artisanCategories ArtisanCategory[]
+      products          Product[]
+    }
+
+    model ArtisanCategory {
+      id         Int @id @default(autoincrement())
+      artisanId  Int
+      categoryId Int
+
+      artisan  Artisan  @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+      category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+      @@unique([artisanId, categoryId])
+    }
+
+    model Product {
+      id          Int      @id @default(autoincrement())
+      artisanId   Int
+      categoryId  Int
+      productName String   @db.VarChar(150)
+      description String?  @db.Text
+      price       Float
+      image       String?  @db.VarChar(500)
+      createdAt   DateTime @default(now())
+
+      artisan  Artisan  @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+      category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+      orders   Order[]
+    }
+
+    model Order {
+      id         Int         @id @default(autoincrement())
+      customerId Int
+      artisanId  Int
+      productId  Int
+      status     OrderStatus @default(PENDING)
+      orderDate  DateTime    @default(now())
+
+      customer User    @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Restrict)
+      artisan  Artisan @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+      product  Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+    }
+
+    model Review {
+      id         Int      @id @default(autoincrement())
+      customerId Int
+      artisanId  Int
+      category   String?  @db.VarChar(100)
+      rating     Int
+      comment    String?  @db.VarChar(2000)
+      createdAt  DateTime @default(now())
+
+      customer User    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+      artisan  Artisan @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+      @@unique([customerId, artisanId])
+    }
+
+    model PasswordReset {
+      id         Int      @id @default(autoincrement())
+      userId     Int?
+      artisanId  Int?
+      resetToken String   @db.VarChar(500)
+      expiryTime DateTime
+      isUsed     Boolean  @default(false)
+
+      user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+      artisan Artisan? @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+    }
+
+    model Chat {
+      id         Int      @id @default(autoincrement())
+      customerId Int
+      artisanId  Int
+      createdAt  DateTime @default(now())
+
+      customer User      @relation("CustomerChats", fields: [customerId], references: [id], onDelete: Restrict)
+      artisan  Artisan   @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+      messages Message[]
+    }
+
+    model Message {
+      id Int @id @default(autoincrement())
+
+      chatId     Int
+      senderId   Int
+      receiverId Int
+
+      message   String   @db.VarChar(4000)
+      isRead    Boolean  @default(false)
+      createdAt DateTime @default(now())
+
+      chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+    }
+
+    model Notification {
+      id Int @id @default(autoincrement())
+
+      userId    Int
+      senderId  Int
+      messageId Int?
+
+      title       String @db.VarChar(150)
+      description String @db.VarChar(500)
+      type        String @db.VarChar(50)
+
+      isRead    Boolean  @default(false)
+      createdAt DateTime @default(now())
+
+      user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    }
