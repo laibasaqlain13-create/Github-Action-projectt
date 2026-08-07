@@ -2,60 +2,107 @@ name: Cicd pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
+
+  # ==========================================
   # Job 1: Build Process
+  # ==========================================
+
   build:
     name: Build & Compile
     runs-on: ubuntu-latest
 
+    # Temporary MySQL database for CI
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: skillsproject
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -prootpassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: mysql://root:rootpassword@127.0.0.1:3306/skillsproject
+
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
 
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
+      # Step 1: Get project code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: npm ci
+      # Step 2: Setup Node.js
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
 
-    - name: Generate Prisma Client
-      run: npx prisma generate
-      env:
-        DATABASE_URL: "mysql://dummy:dummy@localhost:3306/dummy"
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Build project
-      run: npm run build
-      env:
-        CI: false
-        NEXT_DISABLE_ESLINT: true
-        DATABASE_URL: ${{ secrets.DATABASE_URL || 'mysql://dummy:dummy@localhost:3306/dummy' }}
+      # Step 4: Generate Prisma Client
+      - name: Generate Prisma Client
+        run: npx prisma generate
 
-  # Job 2: Separate Security Check
+      # Step 5: Create database tables
+      - name: Setup Database
+        run: npx prisma db push
+
+      # Step 6: Build project
+      - name: Build project
+        run: npm run build
+        env:
+          CI: false
+          NEXT_DISABLE_ESLINT: true
+
+
+  # ==========================================
+  # Job 2: Security Check
+  # ==========================================
+
   security-check:
     name: Security Scan
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
 
-    # --- Trivy Security Scan ---
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'table'
+      # Step 1: Get project code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    # --- Gitleaks Secret Scan ---
-    - name: Run Gitleaks Scan
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ----------------------------------------
+      # Trivy Security Scan
+      # ----------------------------------------
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: "CRITICAL,HIGH"
+
+      # ----------------------------------------
+      # Gitleaks Secret Scan
+      # ----------------------------------------
+
+      - name: Run Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
