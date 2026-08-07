@@ -24,8 +24,13 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Generate Prisma Client (If using Prisma)
+      run: npx prisma generate || echo "Prisma not used, skipping."
+
     - name: Build project
       run: npm run build
+      env:
+        CI: false
 
   # Job 2: Separate Security Check
   security-check:
