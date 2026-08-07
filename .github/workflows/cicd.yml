@@ -20,6 +20,7 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
 
     - name: Install dependencies
       run: npm ci
@@ -29,6 +30,8 @@ jobs:
       env:
         CI: false
         NEXT_DISABLE_ESLINT: true
+        # Agar aap ke admin page ko build time par kisi secret/env ki zarurat hai toh yahan pass karein:
+        # NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
 
   # Job 2: Separate Security Check
   security-check:
@@ -40,24 +43,15 @@ jobs:
       uses: actions/checkout@v4
 
     # --- Trivy Security Scan ---
-    - name: Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget gnupg
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-        sudo apt-get update
-        sudo apt-get install -y trivy
-
-    - name: Trivy FS Scan
-      run: trivy fs --format table -o fs-report.json .
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
 
     # --- Gitleaks Secret Scan ---
-    - name: Install Gitleaks
-      run: |
-        wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-        tar -zxvf gitleaks_8.18.2_linux_x64.tar.gz
-        sudo mv gitleaks /usr/local/bin/
-
     - name: Run Gitleaks Scan
-      run: gitleaks detect --report-path gitleaks-report.json -v
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
